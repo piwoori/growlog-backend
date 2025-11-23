@@ -62,7 +62,7 @@ router.post("/", createEmotion);
 /**
  * @swagger
  * /emotions/today:
- *   put:
+ *   patch:
  *     summary: "오늘 감정 수정 — 인증 선택"
  *     tags: [Emotions]
  *     requestBody:
@@ -87,7 +87,7 @@ router.post("/", createEmotion);
  *       500:
  *         description: "서버 오류"
  */
-router.put("/today", updateTodayEmotion);
+router.patch("/today", updateTodayEmotion);
 
 /**
  * @swagger
@@ -99,15 +99,20 @@ router.put("/today", updateTodayEmotion);
  *     parameters:
  *       - in: query
  *         name: date
- *         schema: { type: string, format: date }
+ *         schema:
+ *           type: string
+ *           format: date
  *         example: "2025-08-01"
  *       - in: query
  *         name: emoji
- *         schema: { type: string }
+ *         schema:
+ *           type: string
  *         example: "😊"
  *     responses:
- *       200: { description: "감정 조회 성공" }
- *       500: { description: "서버 오류" }
+ *       200:
+ *         description: "감정 조회 성공"
+ *       500:
+ *         description: "서버 오류"
  */
 router.get("/", getEmotions);
 
@@ -125,12 +130,20 @@ router.get("/", getEmotions);
  *             type: object
  *             required: ["text"]
  *             properties:
- *               text: { type: string, example: "오늘은 피곤했지만 뿌듯하다." }
- *               date: { type: string, format: date, example: "2025-11-04" }
+ *               text:
+ *                 type: string
+ *                 example: "오늘은 피곤했지만 뿌듯하다."
+ *               date:
+ *                 type: string
+ *                 format: date
+ *                 example: "2025-11-04"
  *     responses:
- *       200: { description: "AI 감정 분석 및 저장 성공" }
- *       400: { description: "text 누락" }
- *       500: { description: "서버 오류" }
+ *       200:
+ *         description: "AI 감정 분석 및 저장 성공"
+ *       400:
+ *         description: "text 누락"
+ *       500:
+ *         description: "서버 오류"
  */
 router.post("/analyze-and-save", async (req, res, next) => {
   try {
