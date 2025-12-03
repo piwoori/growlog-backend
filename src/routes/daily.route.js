@@ -1,45 +1,41 @@
 const express = require('express');
 const router = express.Router();
-const { getDailyData } = require('../controllers/daily.controller');
+const { getDailySummary } = require('../controllers/daily.controller');
 const { authenticateToken } = require('../middlewares/authMiddleware');
+
+/**
+ * @swagger
+ * tags:
+ *   name: Daily
+ *   description: "하루 요약 API (회고/감정/할 일 통합 조회)"
+ */
 
 /**
  * @swagger
  * /daily:
  *   get:
- *     summary: "📅날짜별 감정 & 회고 데이터 조회"
- *     description: "특정 날짜에 작성한 감정과 회고 데이터를 함께 조회합니다."
+ *     summary: "하루 요약 조회 (회고/감정/할 일/달성률)"
  *     tags: [Daily]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: date
- *         required: true
+ *         required: false
  *         schema:
  *           type: string
  *           format: date
- *         description: "조회할 날짜 (예: 2025-08-01)"
+ *         description: "조회할 날짜 (YYYY-MM-DD). 생략 시 오늘 기준."
  *     responses:
  *       200:
- *         description: "감정 및 회고 데이터 반환"
- *         content:
- *           application/json:
- *             example:
- *               emotion:
- *                 id: 3
- *                 userId: 5
- *                 emoji: "😇"
- *                 date: "2025-08-01"
- *               reflection:
- *                 title: "오늘도 성장 가능성은 무한했다."
- *                 content: "배운 것을 바로 적용해보니 실력이 늘고 있다는 확신이 들었다."
+ *         description: "하루 요약 조회 성공"
  *       400:
- *         description: "날짜 파라미터 누락"
+ *         description: "잘못된 요청 (날짜 형식 오류 등)"
+ *       401:
+ *         description: "인증 실패"
  *       500:
  *         description: "서버 오류"
  */
-
-router.get('/', authenticateToken, getDailyData);
+router.get('/', authenticateToken, getDailySummary);
 
 module.exports = router;
