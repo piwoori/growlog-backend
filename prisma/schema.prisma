@@ -51,6 +51,8 @@ model Emotion {
   date       DateTime    @default(now())
   reflection Reflection?
 
+  note String?
+
   // AI 감정 확률 & 메타
   positive  Float?  @default(0)
   neutral   Float?  @default(0)

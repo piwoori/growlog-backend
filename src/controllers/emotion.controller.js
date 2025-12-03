@@ -1,166 +1,232 @@
 // src/controllers/emotion.controller.js
-const { PrismaClient } = require("@prisma/client");
-const prisma = require("../lib/prisma");
-const ai = require("../utils/aiClient"); // ✅ FastAPI 연동 클라이언트
-
-// (선택) FastAPI 모델 메타 고정값 — 필요 시 env로 이관
-const AI_MODEL_NAME = "cardiffnlp/twitter-xlm-roberta-base-sentiment";
-const AI_MODEL_VERSION = "v0.3";
-
-// ✅ 모듈 로드 시점에 req를 쓰지 말 것!
-const getUserId = (req) => req.user?.id ?? 1;
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 /**
- * 'YYYY-MM-DD' 또는 Date를 받아 현지(서버 타임존) 00:00:00로 정규화
- * - 클라이언트가 문자열을 주면 그 날짜의 00:00로 맞춤
- * - 기존 setHours(0,0,0,0)과 동일 목적. KST 기준 고정이 필요하면 서버 TZ를 KST로 두거나, dayjs.tz 등의 라이브러리를 사용 권장.
+ * YYYY-MM-DD 문자열을 DateTime 범위 [start, end) 로 변환
  */
-const normalizeToMidnight = (input) => {
-  const d = input instanceof Date ? new Date(input) : new Date(input);
-  d.setHours(0, 0, 0, 0);
-  return d;
+const getDateRange = (dateString) => {
+  const base = new Date(dateString);
+  if (isNaN(base.getTime())) return null;
+
+  const nextDay = new Date(base);
+  nextDay.setDate(nextDay.getDate() + 1);
+
+  return { start: base, end: nextDay };
 };
 
 /**
- * 감정 기록 (기본: 오늘, 선택적으로 날짜/텍스트 지정 가능)
- * body: { emoji, date, text? }
- *  - text가 오면 AI 분석을 호출하여 확률/라벨/메타를 같이 저장
+ * 감정 기록 생성
+ * POST /emotions
+ * body: { emoji, note?, date? }
  */
 const createEmotion = async (req, res) => {
-  const userId = getUserId(req);
-  const { emoji, date, text } = req.body;
-
-  if (!emoji || !date) {
-    return res.status(400).json({ message: "emoji와 date는 필수입니다." });
-  }
-
   try {
-    const targetDate = normalizeToMidnight(date);
+    const userId = req.user.id;
+    const { emoji, note, date } = req.body;
 
-    // 유니크 제약: (userId, date)
-    const existing = await prisma.emotion.findUnique({
-      where: { userId_date: { userId, date: targetDate } },
+    if (!emoji) {
+      return res.status(400).json({ error: '이모지는 필수입니다.' });
+    }
+
+    const todayString = new Date().toISOString().slice(0, 10);
+    const target = date || todayString;
+
+    const range = getDateRange(target);
+    if (!range) {
+      return res
+          .status(400)
+          .json({ error: '잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 보내주세요.' });
+    }
+    const { start, end } = range;
+
+    // ✅ 1일 1감정 보장: 이미 있으면 생성 막기
+    const existing = await prisma.emotion.findFirst({
+      where: {
+        userId,
+        date: { gte: start, lt: end },
+      },
     });
+
     if (existing) {
-      return res.status(409).json({ message: "이 날짜에는 이미 감정을 기록했습니다." });
+      return res
+          .status(409)
+          .json({ error: '이미 이 날짜에 감정이 기록되어 있습니다.' });
     }
 
-    // 기본 저장 데이터
-    const data = {
-      userId,
-      emoji,
-      date: targetDate,
-    };
+    // 감정 생성
+    const newEmotion = await prisma.emotion.create({
+      data: {
+        emoji,
+        note: note || null,
+        userId,
+        date: start,
+      },
+    });
 
-    // 텍스트가 있으면 AI 분석 시도 (실패해도 본문 저장은 진행)
-    if (text && text.trim()) {
-      try {
-        const { data: aiRes } = await ai.post("/analyze", { text });
-        // FastAPI 응답: { text, positive, neutral, negative, label, device? }
-        data.positive = aiRes.positive;
-        data.neutral = aiRes.neutral;
-        data.negative = aiRes.negative;
-        data.aiLabel = aiRes.label;
-        data.aiModel = AI_MODEL_NAME;
-        data.aiVersion = AI_MODEL_VERSION;
-      } catch (err) {
-        console.warn("AI analyze failed (createEmotion):", err?.response?.data || err.message);
-      }
+    // ✅ 같은 날짜 회고가 있으면 1:1 연결 (Reflection.emotionId 업데이트)
+    const reflection = await prisma.reflection.findFirst({
+      where: {
+        userId,
+        date: { gte: start, lt: end },
+      },
+    });
+
+    if (reflection) {
+      await prisma.reflection.update({
+        where: { id: reflection.id },
+        data: { emotionId: newEmotion.id }, // Reflection 모델에 emotionId Int? 필드가 있다고 가정
+      });
     }
 
-    const emotion = await prisma.emotion.create({ data });
-    return res.status(201).json({ message: "감정이 저장되었습니다.", emotion });
+    return res.status(201).json({
+      message: '감정이 성공적으로 기록되었습니다.',
+      emotion: newEmotion,
+    });
   } catch (error) {
-    console.error("❌ 감정 저장 오류:", error);
-    return res.status(500).json({ message: "감정 저장 중 서버 오류 발생" });
+    console.error('❌ 감정 기록 오류:', error);
+    return res
+        .status(500)
+        .json({ error: '감정 기록 중 오류가 발생했습니다.' });
   }
 };
 
 /**
- * 오늘 감정 수정
- * body: { emoji, text? }
- *  - text가 오면 재분석하여 확률/라벨/메타도 업데이트
- */
-const updateTodayEmotion = async (req, res) => {
-  const userId = getUserId(req);
-  const { emoji, text } = req.body;
-
-  if (!emoji) {
-    return res.status(400).json({ message: "emoji는 필수입니다." });
-  }
-
-  const today = normalizeToMidnight(new Date());
-
-  try {
-    const existing = await prisma.emotion.findUnique({
-      where: { userId_date: { userId, date: today } },
-    });
-
-    if (!existing) {
-      return res.status(404).json({ message: "오늘 기록된 감정이 없습니다." });
-    }
-
-    const data = { emoji };
-
-    if (text && text.trim()) {
-      try {
-        const { data: aiRes } = await ai.post("/analyze", { text });
-        data.positive = aiRes.positive;
-        data.neutral = aiRes.neutral;
-        data.negative = aiRes.negative;
-        data.aiLabel = aiRes.label;
-        data.aiModel = AI_MODEL_NAME;
-        data.aiVersion = AI_MODEL_VERSION;
-      } catch (err) {
-        console.warn("AI analyze failed (updateTodayEmotion):", err?.response?.data || err.message);
-      }
-    }
-
-    const updated = await prisma.emotion.update({
-      where: { userId_date: { userId, date: today } },
-      data,
-    });
-
-    return res.status(200).json({ message: "감정이 수정되었습니다.", emotion: updated });
-  } catch (error) {
-    console.error("❌ 감정 수정 오류:", error);
-    return res.status(500).json({ message: "감정 수정 중 서버 오류 발생" });
-  }
-};
-
-/**
- * 감정 조회 (기본: 오늘, 또는 날짜/감정 조건 조회)
- * query: ?date=YYYY-MM-DD&emoji=😊
+ * 감정 목록 조회 (옵션: 날짜, 이모지)
+ * GET /emotions?date=YYYY-MM-DD&emoji=😄
  */
 const getEmotions = async (req, res) => {
-  const userId = getUserId(req);
-  const { date, emoji } = req.query;
-
   try {
-    const where = { userId };
+    const userId = req.user.id;
+    const { date, emoji } = req.query;
+
+    let where = { userId };
 
     if (date) {
-      where.date = normalizeToMidnight(date);
-    } else {
-      where.date = normalizeToMidnight(new Date());
+      const range = getDateRange(date);
+      if (!range) {
+        return res
+            .status(400)
+            .json({ error: '잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 보내주세요.' });
+      }
+      const { start, end } = range;
+
+      where = {
+        ...where,
+        date: {
+          gte: start,
+          lt: end,
+        },
+      };
     }
 
-    if (emoji) where.emoji = String(emoji);
+    if (emoji) {
+      where = {
+        ...where,
+        emoji: String(emoji),
+      };
+    }
 
     const emotions = await prisma.emotion.findMany({
       where,
-      orderBy: { date: "desc" },
+      orderBy: { date: 'desc' },
     });
 
     return res.status(200).json({ emotions });
   } catch (error) {
-    console.error("❌ 감정 조회 오류:", error);
-    return res.status(500).json({ message: "감정 조회 중 서버 오류 발생" });
+    console.error('❌ 감정 목록 조회 오류:', error);
+    return res
+        .status(500)
+        .json({ error: '감정 목록 조회 중 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * 감정 상세 조회
+ * GET /emotions/:id
+ */
+const getEmotionById = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const emotionId = parseInt(req.params.id, 10);
+
+    const emotion = await prisma.emotion.findUnique({
+      where: { id: emotionId },
+    });
+
+    if (!emotion) {
+      return res.status(404).json({ error: '감정을 찾을 수 없습니다.' });
+    }
+
+    if (emotion.userId !== userId) {
+      return res
+          .status(403)
+          .json({ error: '본인의 감정만 조회할 수 있습니다.' });
+    }
+
+    return res.status(200).json({ emotion });
+  } catch (error) {
+    console.error('❌ 감정 상세 조회 오류:', error);
+    return res
+        .status(500)
+        .json({ error: '감정 상세 조회 중 오류가 발생했습니다.' });
+  }
+};
+
+/**
+ * 감정 수정 (이모지/메모 수정)
+ * PATCH /emotions/:id
+ * body: { emoji?, note? }
+ */
+const updateEmotion = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const emotionId = parseInt(req.params.id, 10);
+    const { emoji, note } = req.body;
+
+    if (!emoji && typeof note === 'undefined') {
+      return res
+          .status(400)
+          .json({ error: '수정할 내용이 없습니다. emoji 또는 note를 보내주세요.' });
+    }
+
+    const existing = await prisma.emotion.findUnique({
+      where: { id: emotionId },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: '감정을 찾을 수 없습니다.' });
+    }
+
+    if (existing.userId !== userId) {
+      return res
+          .status(403)
+          .json({ error: '본인의 감정만 수정할 수 있습니다.' });
+    }
+
+    const updated = await prisma.emotion.update({
+      where: { id: emotionId },
+      data: {
+        emoji: emoji ?? existing.emoji,
+        note: typeof note === 'undefined' ? existing.note : note,
+      },
+    });
+
+    return res.status(200).json({
+      message: '감정이 성공적으로 수정되었습니다.',
+      emotion: updated,
+    });
+  } catch (error) {
+    console.error('❌ 감정 수정 오류:', error);
+    return res
+        .status(500)
+        .json({ error: '감정 수정 중 오류가 발생했습니다.' });
   }
 };
 
 module.exports = {
   createEmotion,
-  updateTodayEmotion,
   getEmotions,
+  getEmotionById,
+  updateEmotion,
 };

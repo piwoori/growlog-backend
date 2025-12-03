@@ -1,185 +1,161 @@
-// src/routes/emotion.route.js
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const axios = require("axios");
-
 const {
   createEmotion,
-  updateTodayEmotion,
   getEmotions,
-} = require("../controllers/emotion.controller");
+  getEmotionById,
+  updateEmotion,
+} = require('../controllers/emotion.controller');
+const { authenticateToken } = require('../middlewares/authMiddleware');
 
-const optionalAuth = require("../middlewares/optionalAuth");
-const fallbackUser = require("../middlewares/fallbackUser");
-const ensureUserExists = require("../middlewares/ensureUserExists");
-
-const prisma = require("../lib/prisma");
-const AI_API_URL = process.env.AI_API_URL || "http://localhost:8000";
-
-// ✅ 모든 emotions 엔드포인트: 토큰 있으면 인증, 없으면 임시 유저(id=1) + 유저 보장
-router.use(optionalAuth, fallbackUser, ensureUserExists);
-
-const normalizeToMidnight = (input) => {
-  const d = input ? new Date(input) : new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
+/**
+ * @swagger
+ * tags:
+ *   name: Emotions
+ *   description: "감정 기록 API"
+ */
 
 /**
  * @swagger
  * /emotions:
  *   post:
- *     summary: "감정 기록 (기본: 오늘, 선택적으로 날짜 지정 가능) — 인증 선택"
+ *     summary: "감정 기록 생성"
  *     tags: [Emotions]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: ["emoji","date"]
  *             properties:
  *               emoji:
  *                 type: string
- *                 example: "😊"
+ *                 example: "😄"
+ *               note:
+ *                 type: string
+ *                 example: "오늘은 Growlog 기능을 많이 완성해서 뿌듯했다."
  *               date:
  *                 type: string
  *                 format: date
- *                 example: "2025-08-01"
- *               text:
- *                 type: string
- *                 example: "오늘은 피곤했지만 뿌듯하다."
+ *                 example: "2025-12-03"
+ *                 description: "기록할 날짜 (YYYY-MM-DD). 생략 시 오늘 기준."
  *     responses:
  *       201:
  *         description: "감정 기록 성공"
+ *       400:
+ *         description: "잘못된 요청 (필수 값 누락 또는 날짜 형식 오류)"
+ *       401:
+ *         description: "인증 실패"
  *       409:
- *         description: "이미 해당 날짜에 감정을 기록함"
+ *         description: "해당 날짜에 이미 감정이 기록된 경우"
  *       500:
  *         description: "서버 오류"
  */
-router.post("/", createEmotion);
-
-/**
- * @swagger
- * /emotions/today:
- *   patch:
- *     summary: "오늘 감정 수정 — 인증 선택"
- *     tags: [Emotions]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: ["emoji"]
- *             properties:
- *               emoji:
- *                 type: string
- *                 example: "😢"
- *               text:
- *                 type: string
- *                 example: "오늘은 좀 지침"
- *     responses:
- *       200:
- *         description: "감정 수정 성공"
- *       404:
- *         description: "오늘 감정 기록이 존재하지 않음"
- *       500:
- *         description: "서버 오류"
- */
-router.patch("/today", updateTodayEmotion);
+router.post('/', authenticateToken, createEmotion);
 
 /**
  * @swagger
  * /emotions:
  *   get:
- *     summary: "감정 조회 (기본: 오늘, 또는 날짜/감정 조건 검색) — 인증 선택"
- *     description: "쿼리 없으면 오늘 기준. 인증 토큰 없으면 임시 유저(id=1) 기준으로 동작."
+ *     summary: "감정 목록 조회 (옵션: 날짜/이모지 필터)"
  *     tags: [Emotions]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: date
+ *         required: false
  *         schema:
  *           type: string
  *           format: date
- *         example: "2025-08-01"
+ *         description: "특정 날짜의 감정만 조회 (YYYY-MM-DD)"
  *       - in: query
  *         name: emoji
+ *         required: false
  *         schema:
  *           type: string
- *         example: "😊"
+ *         description: "특정 이모지로 필터링"
  *     responses:
  *       200:
- *         description: "감정 조회 성공"
+ *         description: "감정 목록 조회 성공"
+ *       400:
+ *         description: "잘못된 요청 (날짜 형식 오류)"
+ *       401:
+ *         description: "인증 실패"
  *       500:
  *         description: "서버 오류"
  */
-router.get("/", getEmotions);
+router.get('/', authenticateToken, getEmotions);
 
 /**
  * @swagger
- * /emotions/analyze-and-save:
- *   post:
- *     summary: "AI 감정 분석 후 결과를 Emotion에 upsert — 인증 선택"
+ * /emotions/{id}:
+ *   get:
+ *     summary: "감정 상세 조회"
  *     tags: [Emotions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: "감정 ID"
+ *     responses:
+ *       200:
+ *         description: "감정 상세 조회 성공"
+ *       403:
+ *         description: "권한 없음 (다른 사용자의 감정)"
+ *       404:
+ *         description: "감정을 찾을 수 없음"
+ *       500:
+ *         description: "서버 오류"
+ */
+router.get('/:id', authenticateToken, getEmotionById);
+
+/**
+ * @swagger
+ * /emotions/{id}:
+ *   patch:
+ *     summary: "감정 수정"
+ *     tags: [Emotions]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: "감정 ID"
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: ["text"]
  *             properties:
- *               text:
+ *               emoji:
  *                 type: string
- *                 example: "오늘은 피곤했지만 뿌듯하다."
- *               date:
+ *                 example: "🙂"
+ *               note:
  *                 type: string
- *                 format: date
- *                 example: "2025-11-04"
+ *                 example: "기분이 조금 가라앉았지만 그래도 나쁘지 않았다."
  *     responses:
  *       200:
- *         description: "AI 감정 분석 및 저장 성공"
+ *         description: "감정 수정 성공"
  *       400:
- *         description: "text 누락"
+ *         description: "잘못된 요청 (수정할 데이터 없음)"
+ *       403:
+ *         description: "권한 없음 (다른 사용자의 감정)"
+ *       404:
+ *         description: "감정을 찾을 수 없음"
  *       500:
  *         description: "서버 오류"
  */
-router.post("/analyze-and-save", async (req, res, next) => {
-  try {
-    const userId = req.user.id; // ensureUserExists 덕분에 존재
-    const { text, date } = req.body;
-    if (!text) return res.status(400).json({ message: "text is required" });
-
-    const { data } = await axios.post(`${AI_API_URL}/analyze`, { text });
-    const targetDate = normalizeToMidnight(date);
-
-    const saved = await prisma.emotion.upsert({
-      where: { userId_date: { userId, date: targetDate } },
-      update: {
-        positive: data.positive,
-        neutral: data.neutral,
-        negative: data.negative,
-        aiLabel: data.label,
-        aiModel: "cardiffnlp/twitter-xlm-roberta-base-sentiment",
-        aiVersion: "v0.2",
-      },
-      create: {
-        userId,
-        date: targetDate,
-        positive: data.positive,
-        neutral: data.neutral,
-        negative: data.negative,
-        aiLabel: data.label,
-        aiModel: "cardiffnlp/twitter-xlm-roberta-base-sentiment",
-        aiVersion: "v0.2",
-      },
-    });
-
-    res.json({ ok: true, emotion: saved, ai: data });
-  } catch (error) {
-    next(error);
-  }
-});
+router.patch('/:id', authenticateToken, updateEmotion);
 
 module.exports = router;

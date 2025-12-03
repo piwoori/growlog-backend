@@ -1,38 +1,83 @@
+// src/controllers/reflection.controller.js
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 /**
+ * YYYY-MM-DD 문자열을 DateTime 범위 [start, end) 로 변환
+ */
+const getDateRange = (dateString) => {
+  const base = new Date(dateString);
+  if (isNaN(base.getTime())) return null;
+
+  const nextDay = new Date(base);
+  nextDay.setDate(nextDay.getDate() + 1);
+
+  return { start: base, end: nextDay };
+};
+
+/**
  * 회고 생성
  * POST /reflections
+ * body: { content, date? }
  */
 const createReflection = async (req, res) => {
   try {
-    const userId = req.user.id; // 🔥 userId가 아니라 id 로 통일
+    const userId = req.user.id;
     const { content, date } = req.body;
 
     if (!content) {
       return res.status(400).json({ error: '회고 내용은 필수입니다.' });
     }
 
-    const data = {
-      content,
-      userId,
-    };
+    // 날짜 문자열 (없으면 오늘)
+    const todayString = new Date().toISOString().slice(0, 10);
+    const target = date || todayString;
 
-    // ⭐ date가 DateTime 컬럼일 때: 문자열 → Date로 변환해서 저장
-    if (date) {
-      const parsed = new Date(date); // "2025-12-03" → Date 객체
-      if (isNaN(parsed.getTime())) {
-        return res
-            .status(400)
-            .json({ error: '잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 보내주세요.' });
-      }
-      data.date = parsed;
+    const range = getDateRange(target);
+    if (!range) {
+      return res
+          .status(400)
+          .json({ error: '잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 보내주세요.' });
+    }
+    const { start, end } = range;
+
+    // ✅ 1일 1회고 보장: 이미 있으면 생성 막기
+    const existing = await prisma.reflection.findFirst({
+      where: {
+        userId,
+        date: { gte: start, lt: end },
+      },
+    });
+
+    if (existing) {
+      return res
+          .status(409)
+          .json({ error: '이미 이 날짜에 회고가 기록되어 있습니다.' });
     }
 
-    const newReflection = await prisma.reflection.create({
-      data,
+    // 우선 회고 생성
+    let newReflection = await prisma.reflection.create({
+      data: {
+        content,
+        userId,
+        date: start,
+      },
     });
+
+    // ✅ 같은 날짜 감정이 있으면 1:1 연결 (Reflection.emotionId 업데이트)
+    const emotion = await prisma.emotion.findFirst({
+      where: {
+        userId,
+        date: { gte: start, lt: end },
+      },
+    });
+
+    if (emotion) {
+      newReflection = await prisma.reflection.update({
+        where: { id: newReflection.id },
+        data: { emotionId: emotion.id }, // Reflection 모델에 emotionId Int? 필드가 있다고 가정
+      });
+    }
 
     return res.status(201).json({
       message: '회고가 성공적으로 저장되었습니다.',
@@ -55,26 +100,22 @@ const getReflections = async (req, res) => {
     const userId = req.user.id;
     const { date } = req.query;
 
-    // 기본 조건: 본인 것만
     let where = { userId };
 
-    // ⭐ date가 DateTime 컬럼일 때: 하루 범위(gte ~ lt)로 조회
     if (date) {
-      const parsed = new Date(date);
-      if (isNaN(parsed.getTime())) {
+      const range = getDateRange(date);
+      if (!range) {
         return res
             .status(400)
             .json({ error: '잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 보내주세요.' });
       }
-
-      const nextDay = new Date(parsed);
-      nextDay.setDate(nextDay.getDate() + 1);
+      const { start, end } = range;
 
       where = {
         ...where,
         date: {
-          gte: parsed,
-          lt: nextDay,
+          gte: start,
+          lt: end,
         },
       };
     }
@@ -105,7 +146,7 @@ const getReflectionById = async (req, res) => {
     const reflection = await prisma.reflection.findUnique({
       where: { id: reflectionId },
       include: {
-        emotion: true, // 감정 연결 시 함께 조회
+        emotion: true, // 같은 날짜 감정이 연결되어 있다면 함께 반환
       },
     });
 
