@@ -8,12 +8,13 @@ datasource db {
 }
 
 model User {
-  id         Int          @id @default(autoincrement())
-  email      String       @unique
-  password   String
-  nickname   String       @unique @default("user")
-  role       String       @default("USER")
-  createdAt  DateTime     @default(now())
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  nickname  String   @unique @default("user")
+  role      String   @default("USER")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   todos       Todo[]
   reflections Reflection[]
@@ -30,35 +31,35 @@ model Todo {
 }
 
 model Reflection {
-  id         Int       @id @default(autoincrement())
-  userId     Int
-  content    String
-  createdAt  DateTime  @default(now())
-  emotionId  Int?      @unique
-  date       DateTime  @default(now())
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  content   String
+  createdAt DateTime @default(now())
+  emotionId Int?     @unique
+  date      DateTime @default(now())
 
-  user       User      @relation(fields: [userId], references: [id])
-  emotion    Emotion?  @relation(fields: [emotionId], references: [id])
+  user    User     @relation(fields: [userId], references: [id])
+  emotion Emotion? @relation(fields: [emotionId], references: [id])
 
   @@index([userId])
 }
 
 model Emotion {
-  id         Int       @id @default(autoincrement())
+  id         Int         @id @default(autoincrement())
   userId     Int
-  emoji      String?                 // ← 이모지 선택 안 하는 날도 고려해 optional 권장
-  date       DateTime  @default(now())
+  emoji      String? // ← 이모지 선택 안 하는 날도 고려해 optional 권장
+  date       DateTime    @default(now())
   reflection Reflection?
 
   // AI 감정 확률 & 메타
-  positive   Float?    @default(0)
-  neutral    Float?    @default(0)
-  negative   Float?    @default(0)
-  aiLabel    String?
-  aiModel    String?
-  aiVersion  String?
+  positive  Float?  @default(0)
+  neutral   Float?  @default(0)
+  negative  Float?  @default(0)
+  aiLabel   String?
+  aiModel   String?
+  aiVersion String?
 
-  user       User      @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, date], name: "userId_date")
   @@index([userId])

@@ -35,6 +35,7 @@ exports.signup = async (req, res) => {
 
     res.status(201).json({ message: '회원가입 성공', userId: newUser.id });
   } catch (err) {
+    console.error('🔥 회원가입 실패:', err);
     res.status(500).json({ message: '회원가입 실패', error: err.message });
   }
 };
