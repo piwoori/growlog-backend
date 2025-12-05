@@ -1,18 +1,20 @@
-const express = require('express');
+// src/routes/emotion.route.js
+const express = require("express");
 const router = express.Router();
+
 const {
   createEmotion,
   getEmotions,
-  getEmotionById,
   updateEmotion,
-} = require('../controllers/emotion.controller');
-const { authenticateToken } = require('../middlewares/authMiddleware');
+} = require("../controllers/emotion.controller");
+
+const { authenticateToken } = require("../middlewares/authMiddleware");
 
 /**
  * @swagger
  * tags:
  *   name: Emotions
- *   description: "감정 기록 API"
+ *   description: 감정 기록 API
  */
 
 /**
@@ -20,6 +22,7 @@ const { authenticateToken } = require('../middlewares/authMiddleware');
  * /emotions:
  *   post:
  *     summary: "감정 기록 생성"
+ *     description: "하루에 하나의 감정을 이모지와 메모로 기록합니다."
  *     tags: [Emotions]
  *     security:
  *       - bearerAuth: []
@@ -35,31 +38,29 @@ const { authenticateToken } = require('../middlewares/authMiddleware');
  *                 example: "😄"
  *               note:
  *                 type: string
- *                 example: "오늘은 Growlog 기능을 많이 완성해서 뿌듯했다."
+ *                 example: "오늘 Growlog 대시보드를 완성했다."
  *               date:
  *                 type: string
  *                 format: date
- *                 example: "2025-12-03"
- *                 description: "기록할 날짜 (YYYY-MM-DD). 생략 시 오늘 기준."
+ *                 example: "2025-12-05"
  *     responses:
  *       201:
  *         description: "감정 기록 성공"
  *       400:
- *         description: "잘못된 요청 (필수 값 누락 또는 날짜 형식 오류)"
+ *         description: "잘못된 요청 (이미 해당 날짜에 감정이 존재하는 경우 등)"
  *       401:
  *         description: "인증 실패"
- *       409:
- *         description: "해당 날짜에 이미 감정이 기록된 경우"
  *       500:
  *         description: "서버 오류"
  */
-router.post('/', authenticateToken, createEmotion);
+router.post("/", authenticateToken, createEmotion);
 
 /**
  * @swagger
  * /emotions:
  *   get:
- *     summary: "감정 목록 조회 (옵션: 날짜/이모지 필터)"
+ *     summary: "날짜별 감정 조회"
+ *     description: "하루에 기록된 감정을 조회합니다. 날짜를 지정하지 않으면 오늘 기준으로 조회합니다."
  *     tags: [Emotions]
  *     security:
  *       - bearerAuth: []
@@ -70,7 +71,7 @@ router.post('/', authenticateToken, createEmotion);
  *         schema:
  *           type: string
  *           format: date
- *         description: "특정 날짜의 감정만 조회 (YYYY-MM-DD)"
+ *         description: "조회할 날짜 (YYYY-MM-DD)"
  *       - in: query
  *         name: emoji
  *         required: false
@@ -79,48 +80,22 @@ router.post('/', authenticateToken, createEmotion);
  *         description: "특정 이모지로 필터링"
  *     responses:
  *       200:
- *         description: "감정 목록 조회 성공"
+ *         description: "감정 조회 성공"
  *       400:
- *         description: "잘못된 요청 (날짜 형식 오류)"
+ *         description: "잘못된 요청"
  *       401:
  *         description: "인증 실패"
  *       500:
  *         description: "서버 오류"
  */
-router.get('/', authenticateToken, getEmotions);
-
-/**
- * @swagger
- * /emotions/{id}:
- *   get:
- *     summary: "감정 상세 조회"
- *     tags: [Emotions]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: "감정 ID"
- *     responses:
- *       200:
- *         description: "감정 상세 조회 성공"
- *       403:
- *         description: "권한 없음 (다른 사용자의 감정)"
- *       404:
- *         description: "감정을 찾을 수 없음"
- *       500:
- *         description: "서버 오류"
- */
-router.get('/:id', authenticateToken, getEmotionById);
+router.get("/", authenticateToken, getEmotions);
 
 /**
  * @swagger
  * /emotions/{id}:
  *   patch:
- *     summary: "감정 수정"
+ *     summary: "감정 기록 수정"
+ *     description: "이미 기록된 감정의 이모지나 메모를 수정합니다."
  *     tags: [Emotions]
  *     security:
  *       - bearerAuth: []
@@ -143,19 +118,21 @@ router.get('/:id', authenticateToken, getEmotionById);
  *                 example: "🙂"
  *               note:
  *                 type: string
- *                 example: "기분이 조금 가라앉았지만 그래도 나쁘지 않았다."
+ *                 example: "오늘은 살짝 피곤했지만 뿌듯했다."
  *     responses:
  *       200:
  *         description: "감정 수정 성공"
  *       400:
- *         description: "잘못된 요청 (수정할 데이터 없음)"
+ *         description: "잘못된 요청"
+ *       401:
+ *         description: "인증 실패"
  *       403:
- *         description: "권한 없음 (다른 사용자의 감정)"
+ *         description: "수정 권한 없음"
  *       404:
  *         description: "감정을 찾을 수 없음"
  *       500:
  *         description: "서버 오류"
  */
-router.patch('/:id', authenticateToken, updateEmotion);
+router.patch("/:id", authenticateToken, updateEmotion);
 
 module.exports = router;

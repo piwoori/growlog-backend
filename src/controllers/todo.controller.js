@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
  * YYYY-MM-DD 문자열을 해당 날짜의 [start, end) 범위로 변환
  */
 const getDateRange = (dateString) => {
-  const base = new Date(dateString);
+  const base = dateString ? new Date(dateString) : new Date();
   if (isNaN(base.getTime())) return null;
 
   const start = new Date(base);
@@ -48,16 +48,31 @@ exports.getTodos = async (req, res) => {
   const userId = req.user.id;
 
   try {
-    const { done } = req.query;
+    const { done, date } = req.query;
     const where = { userId };
 
+    // 완료 여부 필터
     if (done === 'true') where.isDone = true;
     if (done === 'false') where.isDone = false;
+
+    // ✅ 날짜 필터 (없으면 오늘 기준)
+    const targetDate = date || new Date().toISOString().slice(0, 10);
+    const range = getDateRange(targetDate);
+
+    if (!range) {
+      return res.status(400).json({ error: '날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 보내주세요.' });
+    }
+
+    where.createdAt = {
+      gte: range.start,
+      lt: range.end,
+    };
 
     const todos = await prisma.todo.findMany({
       where,
       orderBy: { createdAt: 'desc' },
     });
+
     res.json(todos);
   } catch (error) {
     console.error('🔥 할 일 조회 오류:', error);
