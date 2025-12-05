@@ -12,6 +12,7 @@ const reflectionRouter = require("./routes/reflection.route");
 const emotionRouter = require("./routes/emotion.route");
 const dailyRouter = require("./routes/daily.route"); // 날짜별 회고 & 감정 조회
 const quantumRouter = require("./routes/quantum.route"); // AI 프록시
+const statsRouter = require("./routes/stats.routes");
 
 const { authenticateToken } = require("./middlewares/authMiddleware");
 
@@ -68,6 +69,7 @@ app.use("/reflections", reflectionRouter); // 필요하면 authenticateToken 추
 app.use("/emotions", emotionRouter);
 app.use("/daily", dailyRouter);
 app.use("/quantum", quantumRouter); // 공개 프록시(시연용). 운영시 권한 보호 고려
+app.use("/stats", authenticateToken, statsRouter);
 
 /* --------------------------- 기본 라우트 --------------------------- */
 app.get("/", (req, res) => {

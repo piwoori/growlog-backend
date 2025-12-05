@@ -3,10 +3,26 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+/**
+ * YYYY-MM-DD 문자열을 해당 날짜의 [start, end) 범위로 변환
+ */
+const getDateRange = (dateString) => {
+  const base = new Date(dateString);
+  if (isNaN(base.getTime())) return null;
+
+  const start = new Date(base);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  return { start, end };
+};
+
 // 할 일 등록
 exports.createTodo = async (req, res) => {
   const { content } = req.body;
-  const userId = req.user.id; // ✅ 수정: userId → id
+  const userId = req.user.id;
 
   if (!content) {
     return res.status(400).json({ error: '할 일 내용은 필수입니다.' });
@@ -29,7 +45,7 @@ exports.createTodo = async (req, res) => {
 
 // 할 일 조회
 exports.getTodos = async (req, res) => {
-  const userId = req.user.id; // ✅ 수정
+  const userId = req.user.id;
 
   try {
     const { done } = req.query;
@@ -53,7 +69,7 @@ exports.getTodos = async (req, res) => {
 exports.updateTodo = async (req, res) => {
   const { id } = req.params;
   const { content, isDone } = req.body;
-  const userId = req.user.id; // ✅ 수정
+  const userId = req.user.id;
 
   try {
     const todo = await prisma.todo.findUnique({
@@ -86,7 +102,7 @@ exports.updateTodo = async (req, res) => {
 // 할 일 삭제
 exports.deleteTodo = async (req, res) => {
   const { id } = req.params;
-  const userId = req.user.id; // ✅ 수정
+  const userId = req.user.id;
 
   try {
     const todo = await prisma.todo.findUnique({
@@ -115,7 +131,7 @@ exports.deleteTodo = async (req, res) => {
 // 할 일 완료 상태 토글
 exports.toggleTodoStatus = async (req, res) => {
   const { id } = req.params;
-  const userId = req.user.id; // ✅ 수정
+  const userId = req.user.id;
   console.log('🧪 토큰에서 가져온 userId(id):', userId);
 
   try {
@@ -145,22 +161,36 @@ exports.toggleTodoStatus = async (req, res) => {
   }
 };
 
-// ✅ 할 일 달성률 통계
+// ✅ 할 일 달성률 통계 (특정 날짜 기준)
 exports.getTodoStatistics = async (req, res) => {
-  const userId = req.user.id; // ✅ 수정
+  const userId = req.user.id;
 
   try {
-    const total = await prisma.todo.count({
-      where: { userId },
-    });
+    const { date } = req.query;
+    const todayString = new Date().toISOString().slice(0, 10);
+    const target = date || todayString;
 
-    const completed = await prisma.todo.count({
+    const range = getDateRange(target);
+    if (!range) {
+      return res
+          .status(400)
+          .json({ error: '잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 보내주세요.' });
+    }
+    const { start, end } = range;
+
+    // createdAt 기준으로 해당 날짜의 할 일만 집계
+    const todos = await prisma.todo.findMany({
       where: {
         userId,
-        isDone: true,
+        createdAt: {
+          gte: start,
+          lt: end,
+        },
       },
     });
 
+    const total = todos.length;
+    const completed = todos.filter((t) => t.isDone).length;
     const rate = total === 0 ? 0 : Math.round((completed / total) * 100);
 
     res.status(200).json({
