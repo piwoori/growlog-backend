@@ -53,12 +53,71 @@ const analyzeEmotionText = async (text) => {
 };
 
 /**
+ * 🌱 AI 조언 생성 호출
+ * - text가 없으면 null
+ * - 실패해도 throw 안 하고 null (서비스 계속 동작)
+ */
+const generateEmotionAdvice = async (text, emoji) => {
+  if (!text || !text.trim()) return null;
+
+  try {
+    const baseUrl = process.env.AI_URL || "http://localhost:8000";
+    const res = await axios.post(`${baseUrl}/advice`, {
+      text,
+      emoji: emoji || null,
+    });
+
+    // FastAPI에서 내려주는 그대로 사용
+    // { advice, model, source, note? }
+    return res.data;
+  } catch (error) {
+    console.error(
+        "❌ AI 조언 생성 실패:",
+        error.response?.data || error.message
+    );
+    return null;
+  }
+};
+
+/**
  * 감정 기록 생성 (하루 1개)
  * POST /emotions
  */
 const createEmotion = async (req, res) => {
   const userId = req.user.id;
   const { emoji, note, date } = req.body;
+
+  // 🔮 AI 분석 호출 (note가 있을 경우)
+  const aiResult = await analyzeEmotionText(note);
+
+// 🌱 AI 조언 호출 (note + emoji 기반)
+  const adviceResult = await generateEmotionAdvice(note, emoji);
+
+  const newEmotion = await prisma.emotion.create({
+    data: {
+      emoji,
+      note: note || null,
+      userId,
+      date: start,
+
+      // 감정 분석 결과
+      ...(aiResult && {
+        positive: aiResult.positive,
+        neutral: aiResult.neutral,
+        negative: aiResult.negative,
+        aiLabel: aiResult.label,
+        aiModel: aiResult.model,
+        aiVersion: aiResult.version,
+      }),
+
+      // ✅ 조언 결과 저장
+      ...(adviceResult && {
+        aiAdvice: adviceResult.advice,
+        aiAdviceModel: adviceResult.model,
+        aiAdviceSource: adviceResult.source || null,
+      }),
+    },
+  });
 
   if (!emoji) {
     return res.status(400).json({ error: "이모지는 필수입니다." });
@@ -193,10 +252,17 @@ const updateEmotion = async (req, res) => {
     }
 
     let aiResult = null;
+    let adviceResult = null;
 
-    // note가 변경된 경우에만 AI 재분석
+    // 🧠 note가 변경된 경우에만 AI 재분석 + 조언 재생성
     if (typeof note !== "undefined" && note !== existing.note) {
-      aiResult = await analyzeEmotionText(note);
+      const newText = note;
+      const newEmoji = typeof emoji === "undefined" ? existing.emoji : emoji;
+
+      [aiResult, adviceResult] = await Promise.all([
+        analyzeEmotionText(newText),
+        generateEmotionAdvice(newText, newEmoji),
+      ]);
     }
 
     const updated = await prisma.emotion.update({
@@ -204,6 +270,8 @@ const updateEmotion = async (req, res) => {
       data: {
         emoji: typeof emoji === "undefined" ? existing.emoji : emoji,
         note: typeof note === "undefined" ? existing.note : note,
+
+        // 감정 분석 결과 업데이트 (있을 때만)
         ...(aiResult && {
           positive: aiResult.positive,
           neutral: aiResult.neutral,
@@ -211,6 +279,13 @@ const updateEmotion = async (req, res) => {
           aiLabel: aiResult.label,
           aiModel: aiResult.model,
           aiVersion: aiResult.version,
+        }),
+
+        // ✅ 조언도 업데이트
+        ...(adviceResult && {
+          aiAdvice: adviceResult.advice,
+          aiAdviceModel: adviceResult.model,
+          aiAdviceSource: adviceResult.source || null,
         }),
       },
     });

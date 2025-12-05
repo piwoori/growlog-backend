@@ -61,6 +61,10 @@ model Emotion {
   aiModel   String?
   aiVersion String?
 
+  aiAdvice       String? // 오늘을 위한 조언 문장
+  aiAdviceModel  String? // gpt-4.1-mini / local-fallback 등
+  aiAdviceSource String? // "openai" | "fallback" 같은 값
+
   user User @relation(fields: [userId], references: [id])
 
   @@unique([userId, date], name: "userId_date")
