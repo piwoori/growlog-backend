@@ -96,6 +96,103 @@ exports.getMe = async (req, res) => {
   }
 };
 
+// 프로필 수정 (닉네임 변경)
+exports.updateProfile = async (req, res) => {
+  const userId = req.user.id;
+  const { nickname } = req.body;
+
+  if (!nickname || !nickname.trim()) {
+    return res.status(400).json({ message: '닉네임을 입력해주세요.' });
+  }
+
+  try {
+    const trimmedNickname = nickname.trim();
+
+    // 닉네임 중복 체크 (본인 제외)
+    const existingUser = await prisma.user.findUnique({
+      where: { nickname: trimmedNickname },
+    });
+
+    if (existingUser && existingUser.id !== userId) {
+      return res.status(409).json({ message: '이미 사용 중인 닉네임입니다.' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { nickname: trimmedNickname },
+      select: {
+        id: true,
+        email: true,
+        nickname: true,
+        role: true,
+      },
+    });
+
+    return res.status(200).json({
+      message: '프로필이 수정되었습니다.',
+      user: updatedUser,
+    });
+  } catch (err) {
+    console.error('🔥 프로필 수정 실패:', err);
+    return res.status(500).json({
+      message: '프로필 수정 실패',
+      error: err.message,
+    });
+  }
+};
+
+// 비밀번호 변경
+exports.changePassword = async (req, res) => {
+  const userId = req.user.id;
+  const { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || !newPassword) {
+    return res
+        .status(400)
+        .json({ message: '현재 비밀번호와 새 비밀번호를 모두 입력해주세요.' });
+  }
+
+  if (currentPassword === newPassword) {
+    return res
+        .status(400)
+        .json({ message: '현재 비밀번호와 새 비밀번호가 같습니다.' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res
+          .status(400)
+          .json({ message: '현재 비밀번호가 일치하지 않습니다.' });
+    }
+
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashed },
+    });
+
+    return res
+        .status(200)
+        .json({ message: '비밀번호가 성공적으로 변경되었습니다.' });
+  } catch (err) {
+    console.error('🔥 비밀번호 변경 실패:', err);
+    return res.status(500).json({
+      message: '비밀번호 변경 실패',
+      error: err.message,
+    });
+  }
+};
+
 // 회원 탈퇴
 exports.deleteAccount = async (req, res) => {
   try {

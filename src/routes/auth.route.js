@@ -8,7 +8,10 @@ const {
   checkNickname,
   getMe,
   deleteAccount,
-  getAllUsers, 
+  getAllUsers,
+  // ✅ 새로 추가
+  updateProfile,
+  changePassword,
 } = require('../controllers/auth.controller');
 
 /**
@@ -155,6 +158,75 @@ router.post('/login', login);
  */
 router.get('/me', authenticateToken, getMe);
 
+/**
+ * @swagger
+ * /auth/me:
+ *   patch:
+ *     summary: "프로필 수정 (닉네임 변경)"
+ *     description: "로그인한 사용자의 닉네임을 변경합니다."
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - nickname
+ *             properties:
+ *               nickname:
+ *                 type: string
+ *                 example: growuser_jae
+ *     responses:
+ *       200:
+ *         description: "수정된 유저 정보 반환"
+ *       400:
+ *         description: "닉네임 미입력"
+ *       401:
+ *         description: "인증 실패"
+ *       500:
+ *         description: "서버 오류"
+ */
+router.patch('/me', authenticateToken, updateProfile);
+
+/**
+ * @swagger
+ * /auth/password:
+ *   patch:
+ *     summary: "비밀번호 변경"
+ *     description: "현재 비밀번호를 검증하고 새 비밀번호로 변경합니다."
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - currentPassword
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 example: oldPassword123
+ *               newPassword:
+ *                 type: string
+ *                 example: newPassword123!
+ *     responses:
+ *       200:
+ *         description: "비밀번호 변경 성공"
+ *       400:
+ *         description: "현재 비밀번호 불일치 또는 유효하지 않은 요청"
+ *       401:
+ *         description: "인증 실패"
+ *       500:
+ *         description: "서버 오류"
+ */
+router.patch('/password', authenticateToken, changePassword);
 
 /**
  * @swagger
