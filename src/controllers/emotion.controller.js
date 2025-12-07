@@ -27,15 +27,14 @@ const analyzeEmotionText = async (text) => {
   if (!text || !text.trim()) return null;
 
   try {
-    const baseUrl = process.env.AI_URL || "http://localhost:8000";
-
-    // ❗ 여기: /sentiment → /analyze 로 수정
+    const baseUrl = process.env.AI_URL || "http://localhost:8001";
     const url = `${baseUrl}/analyze`;
+
     console.log("🔮 AI 분석 호출:", url, "text:", text);
 
     const res = await axios.post(url, { text });
-
     const data = res.data;
+
     console.log("🔮 AI 분석 응답:", data);
 
     return {
@@ -61,14 +60,18 @@ const generateEmotionAdvice = async (text, emoji) => {
   if (!text || !text.trim()) return null;
 
   try {
-    const baseUrl = process.env.AI_URL || "http://localhost:8000";
-    const res = await axios.post(`${baseUrl}/advice`, {
+    const baseUrl = process.env.AI_URL || "http://localhost:8001";
+    const url = `${baseUrl}/advice`;
+
+    console.log("🌱 AI 조언 호출:", url, "text:", text, "emoji:", emoji);
+
+    const res = await axios.post(url, {
       text,
       emoji: emoji || null,
     });
 
-    // FastAPI에서 내려주는 그대로 사용
     // { advice, model, source, note? }
+    console.log("🌱 AI 조언 응답:", res.data);
     return res.data;
   } catch (error) {
     console.error(
@@ -87,55 +90,24 @@ const createEmotion = async (req, res) => {
   const userId = req.user.id;
   const { emoji, note, date } = req.body;
 
-  // 🔮 AI 분석 호출 (note가 있을 경우)
-  const aiResult = await analyzeEmotionText(note);
-
-// 🌱 AI 조언 호출 (note + emoji 기반)
-  const adviceResult = await generateEmotionAdvice(note, emoji);
-
-  const newEmotion = await prisma.emotion.create({
-    data: {
-      emoji,
-      note: note || null,
-      userId,
-      date: start,
-
-      // 감정 분석 결과
-      ...(aiResult && {
-        positive: aiResult.positive,
-        neutral: aiResult.neutral,
-        negative: aiResult.negative,
-        aiLabel: aiResult.label,
-        aiModel: aiResult.model,
-        aiVersion: aiResult.version,
-      }),
-
-      // ✅ 조언 결과 저장
-      ...(adviceResult && {
-        aiAdvice: adviceResult.advice,
-        aiAdviceModel: adviceResult.model,
-        aiAdviceSource: adviceResult.source || null,
-      }),
-    },
-  });
-
   if (!emoji) {
     return res.status(400).json({ error: "이모지는 필수입니다." });
   }
 
   try {
+    // 🎯 날짜 범위 계산
     const targetDate = date || new Date().toISOString().slice(0, 10);
     const range = getDateRange(targetDate);
 
     if (!range) {
-      return res
-          .status(400)
-          .json({ error: "날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 보내주세요." });
+      return res.status(400).json({
+        error: "날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 보내주세요.",
+      });
     }
 
     const { start, end } = range;
 
-    // 이미 해당 날짜에 감정이 있는지 체크
+    // 📌 하루 1개 제한: 이미 있는지 확인
     const existing = await prisma.emotion.findFirst({
       where: {
         userId,
@@ -152,15 +124,21 @@ const createEmotion = async (req, res) => {
           .json({ error: "이미 이 날짜에 감정이 기록되어 있습니다." });
     }
 
-    // 🔮 AI 분석 (메모가 있으면)
-    const aiResult = await analyzeEmotionText(note);
+    // 🔮 AI 분석 + 🌱 AI 조언 (note가 있을 경우에만, 동시에 호출)
+    const [aiResult, adviceResult] = await Promise.all([
+      analyzeEmotionText(note),
+      generateEmotionAdvice(note, emoji),
+    ]);
 
+    // ✏️ 감정 생성
     const newEmotion = await prisma.emotion.create({
       data: {
         emoji,
         note: note || null,
         userId,
         date: start,
+
+        // 감정 분석 결과
         ...(aiResult && {
           positive: aiResult.positive,
           neutral: aiResult.neutral,
@@ -168,6 +146,13 @@ const createEmotion = async (req, res) => {
           aiLabel: aiResult.label,
           aiModel: aiResult.model,
           aiVersion: aiResult.version,
+        }),
+
+        // 조언 결과
+        ...(adviceResult && {
+          aiAdvice: adviceResult.advice,
+          aiAdviceModel: adviceResult.model,
+          aiAdviceSource: adviceResult.source || null,
         }),
       },
     });
@@ -196,9 +181,9 @@ const getEmotions = async (req, res) => {
     const range = getDateRange(targetDate);
 
     if (!range) {
-      return res
-          .status(400)
-          .json({ error: "날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 보내주세요." });
+      return res.status(400).json({
+        error: "날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 보내주세요.",
+      });
     }
 
     const where = {
@@ -248,7 +233,9 @@ const updateEmotion = async (req, res) => {
     }
 
     if (existing.userId !== userId) {
-      return res.status(403).json({ error: "본인의 감정만 수정할 수 있습니다." });
+      return res
+          .status(403)
+          .json({ error: "본인의 감정만 수정할 수 있습니다." });
     }
 
     let aiResult = null;
@@ -271,7 +258,6 @@ const updateEmotion = async (req, res) => {
         emoji: typeof emoji === "undefined" ? existing.emoji : emoji,
         note: typeof note === "undefined" ? existing.note : note,
 
-        // 감정 분석 결과 업데이트 (있을 때만)
         ...(aiResult && {
           positive: aiResult.positive,
           neutral: aiResult.neutral,
@@ -281,7 +267,6 @@ const updateEmotion = async (req, res) => {
           aiVersion: aiResult.version,
         }),
 
-        // ✅ 조언도 업데이트
         ...(adviceResult && {
           aiAdvice: adviceResult.advice,
           aiAdviceModel: adviceResult.model,
