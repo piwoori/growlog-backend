@@ -1,6 +1,6 @@
 // src/controllers/todo.controller.js
 
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
 /**
@@ -19,27 +19,41 @@ const getDateRange = (dateString) => {
   return { start, end };
 };
 
-// 할 일 등록
+// ✅ 할 일 등록 (선택한 날짜 기준으로 생성)
 exports.createTodo = async (req, res) => {
-  const { content } = req.body;
+  const { content, date } = req.body; // ⭐ date 추가
   const userId = req.user.id;
 
   if (!content) {
-    return res.status(400).json({ error: '할 일 내용은 필수입니다.' });
+    return res.status(400).json({ error: "할 일 내용은 필수입니다." });
   }
 
   try {
+    // ⭐ 날짜 처리: 없으면 오늘, 형식이 이상하면 오늘
+    let createdAt = new Date();
+    if (date) {
+      const range = getDateRange(date);
+      if (!range) {
+        return res.status(400).json({
+          error: "날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 보내주세요.",
+        });
+      }
+      createdAt = range.start; // 해당 날짜의 00:00:00으로 맞춤
+    }
+
     const newTodo = await prisma.todo.create({
       data: {
         content,
         userId,
         isDone: false,
+        createdAt, // ⭐ 명시적으로 설정
       },
     });
+
     res.status(201).json(newTodo);
   } catch (error) {
-    console.error('🔥 Todo 생성 오류:', error);
-    res.status(500).json({ error: '할 일 생성 실패' });
+    console.error("🔥 Todo 생성 오류:", error);
+    res.status(500).json({ error: "할 일 생성 실패" });
   }
 };
 
@@ -52,15 +66,17 @@ exports.getTodos = async (req, res) => {
     const where = { userId };
 
     // 완료 여부 필터
-    if (done === 'true') where.isDone = true;
-    if (done === 'false') where.isDone = false;
+    if (done === "true") where.isDone = true;
+    if (done === "false") where.isDone = false;
 
     // ✅ 날짜 필터 (없으면 오늘 기준)
     const targetDate = date || new Date().toISOString().slice(0, 10);
     const range = getDateRange(targetDate);
 
     if (!range) {
-      return res.status(400).json({ error: '날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 보내주세요.' });
+      return res.status(400).json({
+        error: "날짜 형식이 잘못되었습니다. YYYY-MM-DD 형식으로 보내주세요.",
+      });
     }
 
     where.createdAt = {
@@ -70,13 +86,13 @@ exports.getTodos = async (req, res) => {
 
     const todos = await prisma.todo.findMany({
       where,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
     });
 
     res.json(todos);
   } catch (error) {
-    console.error('🔥 할 일 조회 오류:', error);
-    res.status(500).json({ error: '할 일 조회 실패' });
+    console.error("🔥 할 일 조회 오류:", error);
+    res.status(500).json({ error: "할 일 조회 실패" });
   }
 };
 
@@ -92,25 +108,25 @@ exports.updateTodo = async (req, res) => {
     });
 
     if (!todo) {
-      return res.status(404).json({ error: '해당 할 일을 찾을 수 없습니다.' });
+      return res.status(404).json({ error: "해당 할 일을 찾을 수 없습니다." });
     }
 
     if (todo.userId !== userId) {
-      return res.status(403).json({ error: '수정 권한이 없습니다.' });
+      return res.status(403).json({ error: "수정 권한이 없습니다." });
     }
 
     const updatedTodo = await prisma.todo.update({
       where: { id: Number(id) },
       data: {
         ...(content !== undefined && { content }),
-        ...(isDone !== undefined && { isDone }),
+        ...(typeof isDone === "boolean" && { isDone }),
       },
     });
 
     res.json(updatedTodo);
   } catch (error) {
-    console.error('🔥 할 일 수정 오류:', error);
-    res.status(500).json({ error: '할 일 수정 실패' });
+    console.error("🔥 할 일 수정 오류:", error);
+    res.status(500).json({ error: "할 일 수정 실패" });
   }
 };
 
@@ -125,21 +141,23 @@ exports.deleteTodo = async (req, res) => {
     });
 
     if (!todo) {
-      return res.status(404).json({ error: '삭제할 할 일이 존재하지 않습니다.' });
+      return res
+          .status(404)
+          .json({ error: "삭제할 할 일이 존재하지 않습니다." });
     }
 
     if (todo.userId !== userId) {
-      return res.status(403).json({ error: '삭제 권한이 없습니다.' });
+      return res.status(403).json({ error: "삭제 권한이 없습니다." });
     }
 
     await prisma.todo.delete({
       where: { id: Number(id) },
     });
 
-    res.json({ message: '삭제 완료' });
+    res.json({ message: "삭제 완료" });
   } catch (error) {
-    console.error('🔥 삭제 오류:', error);
-    res.status(500).json({ error: '삭제 실패' });
+    console.error("🔥 삭제 오류:", error);
+    res.status(500).json({ error: "삭제 실패" });
   }
 };
 
@@ -147,7 +165,7 @@ exports.deleteTodo = async (req, res) => {
 exports.toggleTodoStatus = async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
-  console.log('🧪 토큰에서 가져온 userId(id):', userId);
+  console.log("🧪 토큰에서 가져온 userId(id):", userId);
 
   try {
     const todo = await prisma.todo.findUnique({
@@ -155,11 +173,11 @@ exports.toggleTodoStatus = async (req, res) => {
     });
 
     if (!todo) {
-      return res.status(404).json({ error: '해당 할 일을 찾을 수 없습니다.' });
+      return res.status(404).json({ error: "해당 할 일을 찾을 수 없습니다." });
     }
 
     if (todo.userId !== userId) {
-      return res.status(403).json({ error: '토글 권한이 없습니다.' });
+      return res.status(403).json({ error: "토글 권한이 없습니다." });
     }
 
     const updatedTodo = await prisma.todo.update({
@@ -171,8 +189,8 @@ exports.toggleTodoStatus = async (req, res) => {
 
     res.json(updatedTodo);
   } catch (error) {
-    console.error('🔥 토글 오류:', error);
-    res.status(500).json({ error: '완료 상태 토글 실패' });
+    console.error("🔥 토글 오류:", error);
+    res.status(500).json({ error: "완료 상태 토글 실패" });
   }
 };
 
@@ -189,7 +207,7 @@ exports.getTodoStatistics = async (req, res) => {
     if (!range) {
       return res
           .status(400)
-          .json({ error: '잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 보내주세요.' });
+          .json({ error: "잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 보내주세요." });
     }
     const { start, end } = range;
 
@@ -214,7 +232,7 @@ exports.getTodoStatistics = async (req, res) => {
       rate,
     });
   } catch (error) {
-    console.error('🔥 통계 조회 오류:', error);
-    res.status(500).json({ error: '할 일 통계 조회 실패' });
+    console.error("🔥 통계 조회 오류:", error);
+    res.status(500).json({ error: "할 일 통계 조회 실패" });
   }
 };
