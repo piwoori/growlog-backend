@@ -1,5 +1,5 @@
 # ⚙️ Growlog Backend
-
+![메인](./images/main.png)
 > 감정 기록 기반 자기 관리 서비스 **Growlog의 API 서버**
 
 Growlog Backend는  
