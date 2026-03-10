@@ -1,106 +1,213 @@
-# Growlog 🌱
+# ⚙️ Growlog Backend
 
-감정, 회고, 할 일을 통합 관리할 수 있는 자기개발 API 서비스
-간단한 UI 또는 협업용 API 형태로 사용할 수 있도록 백엔드 중심으로 개발
+> 감정 기록 기반 자기 관리 서비스 **Growlog의 API 서버**
 
----
+Growlog Backend는  
+사용자의 **할 일, 감정 기록, 회고 데이터**를 관리하고  
+AI 감정 분석 서버와 연동하여 데이터를 제공하는 API 서버입니다.
 
-## 📌 주요 기능
-
-- 회원가입 / 로그인 (JWT 인증)
-- 할 일 등록·조회·수정·삭제
-- 회고 작성 및 감정 기록
-- 감정 및 달성률 통계 조회
-- Swagger 기반 API 문서화
+Frontend 서비스와 AI 분석 서버 사이에서  
+**데이터 관리와 서비스 로직을 담당합니다.**
 
 ---
 
-## 🧱 기술 스택
+# 📌 Project Overview
 
-| 분류 | 기술 |
-|------|------|
-| 서버 | Node.js + Express |
-| DB | PostgreSQL |
-| ORM | Prisma |
-| 인증 | JWT (Access / Refresh) |
-| 문서화 | Swagger (OpenAPI) |
-| 배포 | Railway |
+Growlog는 사용자의 하루를
+
+- 할 일 기록
+- 감정 기록
+- 회고 작성
+
+으로 구조화하여  
+**행동과 감정 데이터를 함께 관리하는 자기 관리 서비스**입니다.
+
+Backend 서버는 다음 역할을 수행합니다.
+
+- 사용자 데이터 관리
+- 할 일 관리 API
+- 감정 기록 API
+- 회고 데이터 관리
+- AI 감정 분석 서버 연동
 
 ---
 
-## 🗂️ 폴더 구조
+# 🎯 Why This Project
 
-growlog-backend/
-├── app.js
-├── .env.example
-├── /routes
-├── /controllers
-├── /middlewares
-├── /prisma
+기존 Todo 서비스는 대부분
+
+- 할 일 관리
+- 일정 관리
+
+기능에 집중되어 있습니다.
+
+Growlog는 여기에
+
+**감정 기록과 회고 데이터를 함께 관리하여  
+사용자의 행동과 감정 흐름을 분석할 수 있도록 설계된 서비스입니다.**
+
+Backend 서버는
+
+- 사용자 데이터 관리
+- 감정 데이터 저장
+- AI 분석 데이터 연동
+
+을 담당합니다.
+
+---
+
+# 🧩 Key Features
+
+### 할 일 관리 API
+
+![todo](./images/todo-review.png)
+
+- 오늘 할 일 추가
+- 할 일 완료 체크
+- 할 일 삭제
+- 진행률 계산
+
+---
+
+### 감정 기록 API
+
+![emotion](./images/emotion-record.png)
+
+사용자는 하루에 한 번 감정을 기록할 수 있습니다.
+
+- 감정 선택
+- 감정 메모 작성
+- 감정 데이터 저장
+
+---
+
+### 회고 기록 API
+
+![review](./images/todo-review.png)
+
+하루를 돌아보며 회고를 기록할 수 있습니다.
+
+- 하루 회고 작성
+- 날짜별 회고 조회
+
+---
+
+### AI 감정 분석 연동
+
+![ai](./images/emotion-ai.png)
+
+Backend 서버는
+
+AI 서버와 통신하여  
+감정 분석 데이터를 받아옵니다.
+
+분석 데이터
+
+- 긍정
+- 중립
+- 부정
+
+---
+
+### 통계 데이터 제공
+
+![statistics](./images/statistics.png)
+
+Backend는 다음 데이터를 계산합니다.
+
+- 주간 감정 분포
+- 할 일 완료율
+- 감정 기록 통계
+
+Frontend에서 시각화할 수 있도록 제공합니다.
+
+---
+
+# 🏗 System Architecture
+
+![architecture](./images/architecture.png)
+
+Growlog 서비스는 다음 구조로 구성됩니다.
+
+
+Frontend
+↓
+Backend API Server
+↓
+Database
+↓
+AI Server (FastAPI)
+
+
+Backend는
+
+- 데이터 관리
+- AI 서버 연동
+- API 제공
+
+역할을 담당합니다.
+
+---
+
+# ⚙️ Tech Stack
+
+### Backend
+
+- Node.js
+- Express
+
+### Database
+
+- PostgreSQL
+- Prisma ORM
+
+### API
+
+- REST API
+- Swagger
+
+---
+
+# 📂 Project Structure
+
+```markdown
+```text
+growlog-backend
+├── src
+│   ├── controllers
+│   ├── routes
+│   ├── services
+│   ├── middlewares
+│   └── utils
+├── prisma
 │   └── schema.prisma
-├── /docs
-│   └── swagger.yaml
-└── /utils
-
----
-
-## ⚙️ 로컬 실행 방법
-
-```bash
-# 1. 프로젝트 클론
-git clone https://github.com/your-username/growlog.git
-
-# 2. 디렉토리 이동
-cd growlog
-
-# 3. 패키지 설치
-npm install
-
-# 4. .env 파일 생성
-cp .env.example .env
-
-# 5. DB 마이그레이션
-npx prisma migrate dev --name init
-
-# 6. 서버 실행
-npm run dev
+├── config
+└── app.js
 ```
+🚀 Future Improvements
+
+- 사용자 인증 시스템 개선
+
+- 감정 데이터 기반 추천 기능
+
+- 장기 감정 패턴 분석
+
+- 알림 및 루틴 기능
+
+## 🌱 Growlog Ecosystem
+
+Growlog 서비스는 다음 세 가지 시스템으로 구성됩니다.
+
+**Frontend**  
+사용자 인터페이스 및 데이터 시각화
+
+**Backend**  
+데이터 관리 및 API 서버
+
+**AI Server**  
+감정 분석 및 AI 피드백 제공
+
+이 구조를 통해 사용자의 행동 데이터와 감정 데이터를 연결하여  
+자기 관리 패턴을 분석하는 서비스를 구현합니다.
 
 ---
-
-## 🔐 .env 환경 변수 예시
-
-```env
-PORT=4000
-DATABASE_URL=postgresql://user:password@localhost:5432/growlog
-JWT_SECRET=your_jwt_secret_key
-```
-
----
-
-## 🧪 API 문서 (Swagger)
-
-`/docs/swagger.yaml` 참고  
-또는 서버 실행 후 아래 주소 접속:
-
-```
-http://localhost:4000/api-docs
-```
-
----
-
-## 📦 사용된 주요 라이브러리
-
-- `express`
-- `dotenv`
-- `jsonwebtoken`
-- `bcrypt`
-- `prisma`
-- `cors`
-- `swagger-ui-express`
-
----
-
-## 📄 라이선스
-
-본 프로젝트는 MIT 라이선스를 따릅니다.
