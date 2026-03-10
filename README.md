@@ -69,15 +69,18 @@ Backend 서버는
 
 ---
 
-### 감정 기록 API
+### 감정 기록 API 및 AI 감정 분석
 
 ![emotion](./images/emotion-record.png)
 
 사용자는 하루에 한 번 감정을 기록할 수 있습니다.
+또한 AI 서버와 통신하여  
+감정 분석 데이터를 받아옵니다.
 
 - 감정 선택
 - 감정 메모 작성
 - 감정 데이터 저장
+- 감정 데이터 긍정, 중립, 부정 분석
 
 ---
 
@@ -89,23 +92,6 @@ Backend 서버는
 
 - 하루 회고 작성
 - 날짜별 회고 조회
-
----
-
-### AI 감정 분석 연동
-
-![ai](./images/emotion-ai.png)
-
-Backend 서버는
-
-AI 서버와 통신하여  
-감정 분석 데이터를 받아옵니다.
-
-분석 데이터
-
-- 긍정
-- 중립
-- 부정
 
 ---
 
@@ -184,7 +170,10 @@ growlog-backend
 ├── config
 └── app.js
 ```
-🚀 Future Improvements
+
+---
+
+## 🚀 Future Improvements
 
 - 사용자 인증 시스템 개선
 
@@ -193,6 +182,8 @@ growlog-backend
 - 장기 감정 패턴 분석
 
 - 알림 및 루틴 기능
+
+---
 
 ## 🌱 Growlog Ecosystem
 
